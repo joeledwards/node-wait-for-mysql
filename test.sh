@@ -14,6 +14,7 @@ docker run \
   -e MYSQL_ROOT_PASSWORD=$MY_ROOT_PASSWORD \
   -e MYSQL_USER=$MY_USERNAME \
   -e MYSQL_PASSWORD=$MY_PASSWORD \
+  -e MYSQL_DATABASE=$MY_DATABASE \
   --name=$CONTAINER_NAME \
   -P -d mysql:5.6
 
@@ -34,7 +35,10 @@ coffee src/index.coffee \
   --password=$MY_PASSWORD \
   --database=$MY_DATABASE \
   --connect-timeout=100 \
-  --total-timeout=5000
+  --total-timeout=10000
+
+EXIT_CODE=$?
+echo "Exit code: ${EXIT_CODE}"
 
 docker kill $CONTAINER_NAME
 docker rm $CONTAINER_NAME

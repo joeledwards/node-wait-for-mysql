@@ -17,17 +17,20 @@ waitForMysql = (config) ->
   connectWatch = durations.stopwatch()
 
   attempts = 0
+  pool = mysql.createPool config
 
   # Recursive connection test function
-  testConnection = (connectDelay) ->
+  testConnection = ->
     attempts += 1
     connectWatch.reset().start()
-    connection = mysql.createConnection config, (error) ->
+    pool.getConnection (error, client) ->
       if error?
         console.log "[#{error}] Attempt #{attempts} timed out. Time elapsed: #{watch}" if not quiet
         if watch.duration().millis() > totalTimeout
           connectWatch.stop()
           console.log "Could not connect to MySQL." if not quiet
+          pool.end (error) ->
+            console.log "Error shutting down the MySQL connection pool." if not quiet
           deferred.resolve 1
         else
           totalRemaining = Math.min connectTimeout, Math.max(0, totalTimeout - watch.duration().millis())
@@ -40,8 +43,7 @@ waitForMysql = (config) ->
           console.log "Connected. Running test query: '#{queryString}'"
           client.query queryString, (error, rows) ->
             console.log "Query done."
-            done()
-            client.destroy()
+            client.release()
             if (error)
               console.log "[#{error}] Attempt #{attempts} query failure. Time elapsed: #{watch}" if not quiet
               if watch.duration().millis() > totalTimeout
@@ -54,15 +56,18 @@ waitForMysql = (config) ->
             else
               watch.stop()
               console.log "Query succeeded. #{attempts} attempts over #{watch}"
+              pool.end (error) ->
+                console.log "Error shutting down the MySQL connection pool." if not quiet
               deferred.resolve 0
         else
           watch.stop()
           console.log "Connected. #{attempts} attempts over #{watch}"
-          done()
-          client.destroy()
+          client.release()
+          pool.end (error) ->
+            console.log "Error shutting down the MySQL connection pool." if not quiet
           deferred.resolve 0
 
-  testConnection(0)
+  testConnection()
 
   deferred.promise
 
@@ -87,11 +92,15 @@ runScript = () ->
     user: program.username ? 'mysql'
     password: program.password ? ''
     database: program.database ? 'mysql'
-    connectTimeout: program.connectTimeout ? 250
     totalTimeout: program.totalTimeout ? 15000
     query: program.query ? null
     quiet: program.quiet ? false
     insecureAuth: program.insecureAuth ? false
+    acquireTimeout: program.connectTimeout ? 250
+    connectTimeout: program.connectTimeout ? 250
+    connectionLimit: 1
+    queueLimit: 1
+    waitForConnections: false
 
   waitForMysql(config)
   .then (code) ->
